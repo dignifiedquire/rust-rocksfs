@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         rocksfs.put(key, value)?;
 
         if size % 1000 == 0 {
-            println!("{count} - {}bytes");
+            println!("{count} - {size}bytes");
         }
     }
 
