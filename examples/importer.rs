@@ -16,14 +16,20 @@ fn main() -> Result<()> {
 
     let mut count = 0;
     let mut size = 0;
+
+    let mut buffer = Vec::with_capacity(100);
     for r in flatfs.iter() {
         let (key, value) = r?;
         count += 1;
         size += value.len();
 
-        rocksfs.put(key, value)?;
+        buffer.push((key, value));
+        if buffer.len() == 100 {
+            rocksfs.bulk_put(buffer.iter().map(|(k, v)| (k, v)))?;
+            buffer.clear();
+        }
 
-        if size % 1000 == 0 {
+        if size % 10_000 == 0 {
             println!("{count} - {size}bytes");
         }
     }
