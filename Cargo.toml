@@ -1,7 +1,11 @@
 [package]
-name = "rust-rocksfs"
+name = "rocksfs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Friedel Ziegelmayer <me@dignifiedquire.com>"]
+license = "Apache-2.0/MIT"
+repository = "https://github.com/dignifiedquire/rust-rocksfs"
+description = "Implementation of RocksFs"
 
 
 [dependencies]

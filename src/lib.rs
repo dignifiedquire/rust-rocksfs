@@ -1,3 +1,3 @@
-mod rocksfs;
+mod fs;
 
-pub use rocksfs::RocksFs;
+pub use fs::RocksFs;
