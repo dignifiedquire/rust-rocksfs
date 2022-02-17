@@ -1,0 +1,12 @@
+[package]
+name = "rust-rocksfs"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+eyre = "0.6.6"
+rocksdb = { git = "https://github.com/dignifiedquire/rust-rocksdb", branch = "feat-blob-options" }
+
+[dev-dependencies]
+tempfile = "3.3.0"
