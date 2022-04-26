@@ -1,11 +1,28 @@
 use std::path::Path;
 
 use eyre::{eyre, Result};
-use rocksdb::{DBPinnableSlice, Options, WriteBatch, DB};
+use rocksdb::{DBPinnableSlice, WriteBatch, DB};
 
 #[derive(Debug)]
 pub struct RocksFs {
     db: DB,
+}
+
+pub use rocksdb::Options;
+
+pub fn default_options() -> Options {
+    let mut opts = Options::default();
+    opts.create_if_missing(true);
+    opts.set_enable_blob_files(true);
+    opts.set_min_blob_size(512 * 1024);
+    opts.optimize_for_point_lookup(64 * 1024 * 1024);
+    opts.increase_parallelism(4);
+    opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
+    opts.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
+    opts.set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
+    opts.set_bytes_per_sync(1_048_576);
+
+    opts
 }
 
 impl RocksFs {
@@ -13,12 +30,15 @@ impl RocksFs {
     where
         P: AsRef<Path>,
     {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.set_enable_blob_files(true);
-        opts.set_min_blob_size(512 * 1024);
+        let opts = default_options();
+        Self::with_options(&opts, path)
+    }
 
-        let db = DB::open(&opts, path)?;
+    pub fn with_options<P>(options: &Options, path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let db = DB::open(options, path)?;
 
         Ok(RocksFs { db })
     }

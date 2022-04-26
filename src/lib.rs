@@ -1,3 +1,3 @@
 mod fs;
 
-pub use fs::RocksFs;
+pub use fs::*;
