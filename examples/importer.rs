@@ -15,17 +15,19 @@ fn main() -> Result<()> {
         old_path, new_path, limit
     );
 
-    let mut opts = rocksfs::default_options();
+    let (mut opts, cache) = rocksfs::default_options();
     opts.set_use_direct_io_for_flush_and_compaction(true);
     opts.set_use_direct_reads(true);
+    opts.set_write_buffer_size(512 * 1024 * 1024);
+    opts.set_blob_file_size(512 * 1024 * 1024);
 
     let flatfs = Flatfs::new(old_path)?;
-    let rocksfs = RocksFs::with_options(&opts, new_path)?;
+    let rocksfs = RocksFs::with_options(opts, Some(cache), new_path)?;
 
     let mut count = 0;
     let mut size = 0;
 
-    let buffer_size = 1024;
+    let buffer_size = 512;
     let mut buffer = Vec::with_capacity(buffer_size);
 
     for r in flatfs.iter() {
@@ -50,6 +52,17 @@ fn main() -> Result<()> {
     }
 
     println!("Imported {count} values, of size {size} bytes");
+    let sst_size = rocksfs.sst_files_size()?;
+    println!("sst files size: {}", sst_size);
+
+    rocksfs.compact();
+    println!("Compacted DB");
+
+    let sst_size = rocksfs.sst_files_size()?;
+    println!("sst files size: {}", sst_size);
+
+    let stats = rocksfs.stats()?;
+    println!("{}", stats);
 
     Ok(())
 }

@@ -1,28 +1,40 @@
 use std::path::Path;
 
 use eyre::{eyre, Result};
-use rocksdb::{DBPinnableSlice, WriteBatch, DB};
+use rocksdb::{DBPinnableSlice, WriteBatch, DB, Cache};
 
-#[derive(Debug)]
 pub struct RocksFs {
     db: DB,
+    cache: Option<Cache>,
 }
 
 pub use rocksdb::Options;
 
-pub fn default_options() -> Options {
+pub fn default_options() -> (Options, Cache) {
+    use rocksdb::BlockBasedOptions;
+
     let mut opts = Options::default();
     opts.create_if_missing(true);
     opts.set_enable_blob_files(true);
-    opts.set_min_blob_size(512 * 1024);
+    opts.set_min_blob_size(5 * 1024);
     opts.optimize_for_point_lookup(64 * 1024 * 1024);
-    opts.increase_parallelism(4);
+    opts.increase_parallelism(32); // TODO: dynamic
     opts.set_compression_type(rocksdb::DBCompressionType::Lz4);
     opts.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
     opts.set_blob_compression_type(rocksdb::DBCompressionType::Lz4);
     opts.set_bytes_per_sync(1_048_576);
 
-    opts
+    let cache = Cache::new_lru_cache(128 * 1024 * 1024).unwrap();
+    let mut bopts = BlockBasedOptions::default();
+    // all our data is longer lived, so ribbon filters make sense
+    bopts.set_ribbon_filter(10.0);
+    bopts.set_block_cache(&cache);
+    bopts.set_block_size(6 * 1024);
+    bopts.set_cache_index_and_filter_blocks(true);
+    bopts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+    opts.set_block_based_table_factory(&bopts);
+
+    (opts, cache)
 }
 
 impl RocksFs {
@@ -30,17 +42,21 @@ impl RocksFs {
     where
         P: AsRef<Path>,
     {
-        let opts = default_options();
-        Self::with_options(&opts, path)
+        let (opts, cache) = default_options();
+        Self::with_options(opts, Some(cache), path)
     }
 
-    pub fn with_options<P>(options: &Options, path: P) -> Result<Self>
+    pub fn with_options<P>(options: Options, cache: Option<Cache>, path: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
-        let db = DB::open(options, path)?;
+        let db = DB::open(&options, path)?;
 
-        Ok(RocksFs { db })
+        Ok(RocksFs { db, cache })
+    }
+
+    pub fn compact(&self) {
+        self.db.compact_range::<&[u8], &[u8]>(None, None);
     }
 
     pub fn put<K, V>(&self, key: K, value: V) -> Result<()>
@@ -128,6 +144,16 @@ impl RocksFs {
             .property_int_value("rocksdb.estimate-num-keys")?
             .unwrap_or_default();
         Ok(keys)
+    }
+
+    pub fn stats(&self) -> Result<String> {
+        let stats = self.db.property_value(rocksdb::properties::STATS)?;
+	Ok(stats.unwrap_or_default())
+    }
+
+    pub fn sst_files_size(&self) -> Result<u64> {
+        let size = self.db.property_int_value(rocksdb::properties::TOTAL_SST_FILES_SIZE)?;
+	Ok(size.unwrap_or_default() as u64)
     }
 }
 
